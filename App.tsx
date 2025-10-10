@@ -98,6 +98,9 @@ const App: React.FC = () => {
             setPendingRemovalWinner(null);
           }
           
+          // Close the winner modal when timer completes
+          setWinner(null);
+          
           autoResetTimeoutRef.current = window.setTimeout(() => {
             autoResetTimeoutRef.current = null;
             setTimeLeft(current => (current === 0 ? INITIAL_TIME : current));
