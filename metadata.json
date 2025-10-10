@@ -1,0 +1,5 @@
+{
+  "name": "AIWP Selector and Timer",
+  "description": "A 'wheel of fortune' style random name selector with an integrated 60-second timer. Input names, spin the wheel to pick a winner, and start the countdown. Features audible alerts at 10 seconds and at zero.",
+  "requestFramePermissions": []
+}
