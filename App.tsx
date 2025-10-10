@@ -23,6 +23,7 @@ const App: React.FC = () => {
 
   const [timeLeft, setTimeLeft] = useState<number>(INITIAL_TIME);
   const [isTimerActive, setIsTimerActive] = useState<boolean>(false);
+  const [timerStarted, setTimerStarted] = useState<boolean>(false);
 
   const [isNamesPanelOpen, setIsNamesPanelOpen] = useState<boolean>(false);
   
@@ -97,6 +98,7 @@ const App: React.FC = () => {
             autoResetTimeoutRef.current = null;
             setTimeLeft(INITIAL_TIME);
             setIsTimerActive(false);
+            setTimerStarted(false);
             
             // Remove the pending winner and close modal after 10 seconds
             if (pendingRemovalWinner) {
@@ -196,6 +198,7 @@ const App: React.FC = () => {
     if (timeLeft > 0) {
       clearAutoResetTimeout();
       setIsTimerActive(true);
+      setTimerStarted(true);
     }
   };
 
@@ -203,6 +206,7 @@ const App: React.FC = () => {
     clearAutoResetTimeout();
     setIsTimerActive(false);
     setTimeLeft(INITIAL_TIME);
+    setTimerStarted(false);
     
     // Remove the pending winner and close modal when timer is reset
     if (pendingRemovalWinner) {
@@ -220,6 +224,7 @@ const App: React.FC = () => {
         onStartTimer={handleTimerStart}
         timeLeft={timeLeft}
         isTimerActive={isTimerActive}
+        timerStarted={timerStarted}
         onTimerReset={handleTimerReset}
       />
       <NamesPanel

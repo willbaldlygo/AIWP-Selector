@@ -7,6 +7,7 @@ interface WinnerModalProps {
   onStartTimer: () => void;
   timeLeft: number;
   isTimerActive: boolean;
+  timerStarted: boolean;
   onTimerReset: () => void;
 }
 
@@ -16,6 +17,7 @@ const WinnerModal: React.FC<WinnerModalProps> = ({
   onStartTimer, 
   timeLeft, 
   isTimerActive,
+  timerStarted,
   onTimerReset 
 }) => {
   if (!winner) return null;
@@ -35,7 +37,7 @@ const WinnerModal: React.FC<WinnerModalProps> = ({
         <h2 className="text-5xl font-extrabold text-teal-500 my-4 break-words">{winner}</h2>
         <p className="text-slate-600 mb-8">You've been selected!</p>
         
-        {!isTimerActive ? (
+        {!timerStarted ? (
           <div className="flex flex-col gap-4">
             <button
               onClick={onStartTimer}
@@ -53,7 +55,9 @@ const WinnerModal: React.FC<WinnerModalProps> = ({
         ) : (
           <div className="w-full">
             <div className="text-center mb-6">
-              <h3 className="text-lg font-bold text-slate-700 mb-2">Timer Running</h3>
+              <h3 className="text-lg font-bold text-slate-700 mb-2">
+                {isTimerActive ? 'Timer Running' : 'Time\'s Up!'}
+              </h3>
               <p className="text-7xl font-mono font-bold text-slate-800 tracking-wider my-4">
                 {minutes}:{seconds}
               </p>
