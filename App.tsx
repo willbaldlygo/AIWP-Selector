@@ -92,19 +92,18 @@ const App: React.FC = () => {
           clearAutoResetTimeout();
           playAudioClip(finishAudioRef.current);
           
-          // Remove the pending winner from the wheel when timer completes
-          if (pendingRemovalWinner) {
-            setParticipants(prev => prev.filter(name => name !== pendingRemovalWinner));
-            setPendingRemovalWinner(null);
-          }
-          
-          // Close the winner modal when timer completes
-          setWinner(null);
-          
+          // Set up auto-close after 10 seconds
           autoResetTimeoutRef.current = window.setTimeout(() => {
             autoResetTimeoutRef.current = null;
-            setTimeLeft(current => (current === 0 ? INITIAL_TIME : current));
+            setTimeLeft(INITIAL_TIME);
             setIsTimerActive(false);
+            
+            // Remove the pending winner and close modal after 10 seconds
+            if (pendingRemovalWinner) {
+              setParticipants(prev => prev.filter(name => name !== pendingRemovalWinner));
+              setPendingRemovalWinner(null);
+            }
+            setWinner(null);
           }, 10000);
           return 0;
         }
@@ -205,11 +204,12 @@ const App: React.FC = () => {
     setIsTimerActive(false);
     setTimeLeft(INITIAL_TIME);
     
-    // Remove the pending winner when timer is reset
+    // Remove the pending winner and close modal when timer is reset
     if (pendingRemovalWinner) {
       setParticipants(prev => prev.filter(name => name !== pendingRemovalWinner));
       setPendingRemovalWinner(null);
     }
+    setWinner(null);
   };
 
   return (
