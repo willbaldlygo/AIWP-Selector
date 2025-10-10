@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [participants, setParticipants] = useState<string[]>([]);
   const [winner, setWinner] = useState<string | null>(null);
   const [lastWinner, setLastWinner] = useState<string | null>(null);
+  const [pendingRemovalWinner, setPendingRemovalWinner] = useState<string | null>(null);
 
   const [rotation, setRotation] = useState<number>(0);
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
@@ -90,6 +91,13 @@ const App: React.FC = () => {
           setIsTimerActive(false);
           clearAutoResetTimeout();
           playAudioClip(finishAudioRef.current);
+          
+          // Remove the pending winner from the wheel when timer completes
+          if (pendingRemovalWinner) {
+            setParticipants(prev => prev.filter(name => name !== pendingRemovalWinner));
+            setPendingRemovalWinner(null);
+          }
+          
           autoResetTimeoutRef.current = window.setTimeout(() => {
             autoResetTimeoutRef.current = null;
             setTimeLeft(current => (current === 0 ? INITIAL_TIME : current));
@@ -107,7 +115,7 @@ const App: React.FC = () => {
     return () => {
       clearInterval(intervalId);
     };
-  }, [isTimerActive, playAudioClip, clearAutoResetTimeout]);
+  }, [isTimerActive, playAudioClip, clearAutoResetTimeout, pendingRemovalWinner]);
 
   useEffect(() => {
     return () => {
@@ -158,7 +166,8 @@ const App: React.FC = () => {
     if (selectedWinner) {
       setWinner(selectedWinner);
       setLastWinner(selectedWinner);
-      setParticipants(prev => prev.filter((_, idx) => idx !== winnerIndex));
+      setPendingRemovalWinner(selectedWinner);
+      // Don't remove from participants yet - will be removed when timer completes
     }
     setIsSpinning(false);
     setSelectedIndex(null);
@@ -170,6 +179,7 @@ const App: React.FC = () => {
       setLastWinner(null);
     }
     setWinner(null);
+    setPendingRemovalWinner(null);
   };
   
   const handleResetWheel = () => {
@@ -177,6 +187,7 @@ const App: React.FC = () => {
     setLastWinner(null);
     setWinner(null);
     setIsSpinning(false);
+    setPendingRemovalWinner(null);
   };
 
   const handleTimerStart = () => {
@@ -190,6 +201,12 @@ const App: React.FC = () => {
     clearAutoResetTimeout();
     setIsTimerActive(false);
     setTimeLeft(INITIAL_TIME);
+    
+    // Remove the pending winner when timer is reset
+    if (pendingRemovalWinner) {
+      setParticipants(prev => prev.filter(name => name !== pendingRemovalWinner));
+      setPendingRemovalWinner(null);
+    }
   };
 
   return (
@@ -198,7 +215,9 @@ const App: React.FC = () => {
         winner={winner} 
         onClose={() => setWinner(null)}
         onStartTimer={handleTimerStart}
-        onReAdd={handleReAddWinner}
+        timeLeft={timeLeft}
+        isTimerActive={isTimerActive}
+        onTimerReset={handleTimerReset}
       />
       <NamesPanel
         isOpen={isNamesPanelOpen}
