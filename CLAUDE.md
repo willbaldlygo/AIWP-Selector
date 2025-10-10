@@ -24,7 +24,8 @@ The app follows a standard React component hierarchy:
 - **App.tsx** - Main application container that manages global state including:
   - Participant list management (allNames, participants, winner states)
   - Wheel spinning logic (rotation, animation, winner selection)
-  - Timer control (countdown, audio triggers)
+  - Timer control (countdown, audio triggers, timer completion handling)
+  - Winner removal workflow (delayed until timer completes or is reset)
   - Audio preloading and playback for three sound effects
 
 - **components/Wheel.tsx** - SVG-based spinning wheel with:
@@ -35,17 +36,32 @@ The app follows a standard React component hierarchy:
 
 - **components/Timer.tsx** - Countdown timer display with start/reset controls
 
-- **components/WinnerModal.tsx** - Modal overlay shown after wheel selection
+- **components/WinnerModal.tsx** - Modal overlay shown after wheel selection with:
+  - Conditional display switching between initial winner announcement and timer display
+  - Timer integration that shows countdown prominently for video call visibility
+  - Persistent timer display at 0:00 until manual reset or 10-second auto-close
 
 - **components/NamesPanel.tsx** - Side panel for editing participant names
 
 ### State Management
 
 All state is managed in App.tsx using React hooks:
-- Winner selection automatically removes participant from the wheel
-- Last winner can be re-added to the participant pool
+
+**Winner Selection Flow:**
+- Winner is selected when wheel stops spinning
+- Winner's name and segment REMAIN on the wheel until timer completes or is reset
+- `pendingRemovalWinner` state tracks the selected winner awaiting removal
+- Winner is only removed from wheel when:
+  - The 60-second timer reaches 0:00 and completes, OR
+  - The timer is manually reset by the user, OR
+  - 10 seconds elapse after timer completion (auto-cleanup)
+
+**Timer Behavior:**
+- `timerStarted` flag tracks whether timer has been initiated for current winner
+- `isTimerActive` tracks whether countdown is currently running
 - Timer triggers audio at 10 seconds (countdown) and 0 seconds (finish bell)
-- Auto-reset timeout clears timer 10 seconds after reaching zero
+- Modal displays timer prominently when started, remains visible at 0:00
+- Auto-reset timeout closes modal and removes winner 10 seconds after reaching zero
 
 ### Audio System
 
@@ -74,6 +90,33 @@ The wheel uses a precise rotation calculation to ensure the pointer (top triangl
 4. Adds 3-6 extra full rotations for dramatic effect
 5. Uses CSS `transition-transform` with 4000ms duration
 
+### Winner Removal Workflow
+
+IMPORTANT: Winners are NOT removed immediately upon selection. The workflow is:
+1. Wheel spins and selects a winner
+2. Winner's segment remains visible on the wheel
+3. Modal appears with winner announcement
+4. User starts 60-second timer (or closes modal to keep winner on wheel)
+5. Timer counts down and is displayed in the modal
+6. When timer reaches 0:00:
+   - Timer display remains visible in modal showing "Time's Up!"
+   - Winner segment still visible on wheel
+7. Winner is removed ONLY when:
+   - User clicks "Reset Timer" button, OR
+   - 10 seconds pass after timer completion
+8. Modal closes and wheel is ready for next round
+
+This delayed removal ensures the winner remains visible throughout the entire selection and timing process, making it clear who was selected during video calls.
+
+### Modal Display Logic
+
+The WinnerModal component uses `timerStarted` (not `isTimerActive`) to determine which view to show:
+- **Before timer starts:** Shows winner name, "Start 60s Timer" and "Close" buttons
+- **After timer starts:** Shows timer display with countdown, progress bar, and controls
+- **Timer display persists:** Even when timer stops at 0:00, the timer display remains visible with "Time's Up!" header until reset or auto-close
+
+This prevents the modal from flashing back to the initial view when the timer completes, maintaining visibility for video calls.
+
 ### Font Sizing Algorithm
 
 The Wheel component includes sophisticated font sizing (`computeLabelFontPx`) that:
@@ -93,3 +136,13 @@ The app references `GEMINI_API_KEY` in vite.config but the current implementatio
 ## Testing
 
 No test framework is currently configured. Manual testing can be performed using `npm run dev`.
+
+## Recent Changes
+
+### Winner Retention & Timer Integration (October 2025)
+- Modified winner selection to keep participants on wheel until timer completes
+- Integrated timer display into winner modal for better visibility during video calls
+- Removed "Add Name Back to Wheel" button (Close button keeps winner on wheel)
+- Added `pendingRemovalWinner` and `timerStarted` state management
+- Timer display now persists at 0:00 until manual reset or 10-second auto-close
+- Winner removal now synchronized with modal closure for clean UX
