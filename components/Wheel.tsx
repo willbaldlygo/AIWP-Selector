@@ -10,11 +10,11 @@ interface WheelProps {
 }
 
 const LABEL_FONT_FAMILY = `'Inter', system-ui, -apple-system, sans-serif`;
-const LABEL_FONT_WEIGHT = 700;
-const BASE_FONT_PX = 26;
-const RADIAL_PADDING = 8;
-const MIN_FONT_PX = 11;
-const MAX_FONT_FACTOR = 1.2;
+const LABEL_FONT_WEIGHT = 600;
+const BASE_FONT_PX = 18;
+const RADIAL_PADDING = 12;
+const MIN_FONT_PX = 12;
+const MAX_FONT_PX = 22;
 
 let measureCanvas: HTMLCanvasElement | null = null;
 let measureContext: CanvasRenderingContext2D | null = null;
@@ -43,22 +43,21 @@ const measureTextWidth = (label: string, fontPx: number) => {
 
 const computeLabelFontPx = (
   label: string,
-  angleDeg: number,
-  labelRadius: number,
-  outerRadius: number
+  numSegments: number
 ) => {
-  const angleRad = angleDeg * (Math.PI / 180);
-  const radialSpace = Math.max(0, (outerRadius - labelRadius) - RADIAL_PADDING);
-  const maxByRadial = Math.max(MIN_FONT_PX, radialSpace);
+  // Adaptive font sizing based on segment count and label length
+  let baseFontSize = BASE_FONT_PX;
 
-  const arc = labelRadius * angleRad;
-  const arcUsable = Math.max(0, arc * 0.9);
-  const measuredAtBase = Math.max(1, measureTextWidth(label, BASE_FONT_PX));
-  const maxByArc = BASE_FONT_PX * (arcUsable / measuredAtBase);
+  // Reduce font size for more segments
+  if (numSegments > 12) baseFontSize = 14;
+  else if (numSegments > 8) baseFontSize = 16;
 
-  const raw = Math.min(maxByRadial, maxByArc);
-  const capped = Math.min(raw, BASE_FONT_PX * MAX_FONT_FACTOR);
-  return Math.max(MIN_FONT_PX, capped);
+  // Further reduce for long labels
+  const labelLength = label.length;
+  if (labelLength > 15) baseFontSize = Math.max(MIN_FONT_PX, baseFontSize - 2);
+  else if (labelLength > 10) baseFontSize = Math.max(MIN_FONT_PX, baseFontSize - 1);
+
+  return Math.min(MAX_FONT_PX, Math.max(MIN_FONT_PX, baseFontSize));
 };
 
 const Wheel: React.FC<WheelProps> = ({ participants, colors, rotation, onSpinEnd, isSpinning, onSpin }) => {
@@ -93,30 +92,43 @@ const Wheel: React.FC<WheelProps> = ({ participants, colors, rotation, onSpinEnd
     const largeArcFlag = anglePerSegment > 180 ? 1 : 0;
 
     const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY} L 0 0 Z`;
-    
+
+    // Position text in the middle of the segment
     const textAngle = startAngle + anglePerSegment / 2;
     const textX = textRadius * Math.cos(textAngle * (Math.PI / 180));
     const textY = textRadius * Math.sin(textAngle * (Math.PI / 180));
-    const fontPx = computeLabelFontPx(name, anglePerSegment, textRadius, radius);
-    const needsEllipsis = name.length > 20 && fontPx <= MIN_FONT_PX + 0.5;
-    const displayName = needsEllipsis ? `${name.slice(0, 18)}…` : name;
-    
+
+    const fontPx = computeLabelFontPx(name, numSegments);
+    const needsEllipsis = name.length > 18;
+    const displayName = needsEllipsis ? `${name.slice(0, 16)}…` : name;
+
     return (
       <g key={index}>
         <path d={pathData} fill={colors[index % colors.length]} />
-        <g transform={`translate(${textX}, ${textY}) rotate(${textAngle})`}>
-           <text
+        {/* Segment divider line */}
+        <line
+          x1="0"
+          y1="0"
+          x2={startX}
+          y2={startY}
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1.5"
+        />
+        {/* Horizontal text - always readable */}
+        <g transform={`translate(${textX}, ${textY})`}>
+          <text
             textAnchor="middle"
             dominantBaseline="middle"
-            fill="#000"
-            className="font-bold select-none"
+            className="font-semibold select-none"
             style={{
-              fill: 'white',
-              stroke: 'rgba(0,0,0,0.28)',
-              strokeWidth: '1.5px',
+              fill: '#1e293b',
+              stroke: 'white',
+              strokeWidth: '3px',
               paintOrder: 'stroke',
               fontSize: `${fontPx}px`,
-              letterSpacing: '0.02em'
+              fontWeight: LABEL_FONT_WEIGHT,
+              fontFamily: LABEL_FONT_FAMILY,
+              letterSpacing: '0.01em'
             }}
           >
             {displayName}
@@ -130,20 +142,29 @@ const Wheel: React.FC<WheelProps> = ({ participants, colors, rotation, onSpinEnd
 
   return (
     <div className="wheel-shell relative flex items-center justify-center">
-      <div className="absolute top-[-10px] z-10">
-        <svg width="30" height="40" viewBox="0 0 30 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 40L29.7224 10H0.277568L15 40Z" fill="#1e293b"/>
+      {/* Pointer/Arrow */}
+      <div className="absolute top-[-12px] z-10 drop-shadow-lg">
+        <svg width="36" height="48" viewBox="0 0 36 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M18 48L35 12H1L18 48Z" fill="#dc2626"/>
+          <path d="M18 48L35 12H1L18 48Z" stroke="#991b1b" strokeWidth="2"/>
         </svg>
       </div>
+
+      {/* Wheel */}
       <div
-        className="w-full h-full rounded-full shadow-2xl transition-transform duration-[4000ms] ease-out"
-        style={{ transform: `rotate(${rotation}deg)` }}
+        className="w-full h-full rounded-full transition-transform duration-[4000ms] ease-out relative"
+        style={{
+          transform: `rotate(${rotation}deg)`,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.15), 0 0 0 8px white, 0 0 0 10px #e2e8f0',
+        }}
         onTransitionEnd={onSpinEnd}
       >
         <svg viewBox="-180 -180 360 360" transform="rotate(-90)" className="w-full h-full">
           {segments}
         </svg>
       </div>
+
+      {/* Center button */}
       <button
         type="button"
         onClick={canSpin ? onSpin : undefined}
@@ -156,9 +177,12 @@ const Wheel: React.FC<WheelProps> = ({ participants, colors, rotation, onSpinEnd
         }}
         disabled={!canSpin}
         aria-label={canSpin ? 'Spin the wheel' : 'Cannot spin the wheel'}
-        className="absolute flex items-center justify-center w-12 h-12 bg-white rounded-full border-4 border-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-600 disabled:cursor-not-allowed"
+        className="absolute flex items-center justify-center w-16 h-16 bg-gradient-to-br from-slate-700 to-slate-900 rounded-full border-4 border-white shadow-xl hover:from-slate-600 hover:to-slate-800 transition-all focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
         style={{ cursor: canSpin ? 'pointer' : 'not-allowed' }}
       >
+        <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+        </svg>
         <span className="sr-only">Spin the wheel</span>
       </button>
     </div>

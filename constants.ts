@@ -1,13 +1,16 @@
 export const BRAND_COLORS: string[] = [
-  '#89CFF0', // Light Blue
-  '#BDB76B', // Olive Green
-  '#3CB371', // Green
-  '#B2A2C7', // Lavender
-  '#82A0B9', // Steel Blue
-  '#B7C1A3', // Sage Green
-  '#AFAF8F', // Khaki
-  '#98D68B', // Light Green
-  '#24B3C7', // Turquoise
+  '#3b82f6', // Bright Blue
+  '#10b981', // Emerald Green
+  '#f59e0b', // Amber
+  '#8b5cf6', // Purple
+  '#ec4899', // Pink
+  '#14b8a6', // Teal
+  '#f97316', // Orange
+  '#6366f1', // Indigo
+  '#06b6d4', // Cyan
+  '#84cc16', // Lime
+  '#ef4444', // Red
+  '#a855f7', // Violet
 ];
 
 export const INITIAL_TIME = 60;

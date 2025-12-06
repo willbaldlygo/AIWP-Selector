@@ -236,8 +236,10 @@ const App: React.FC = () => {
       />
 
       <header className="app-header text-center">
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight">Spin & Time Selector</h1>
-        <p className="text-slate-500 mt-2 text-sm sm:text-base">A fair way to choose, with a timer to keep things moving.</p>
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+          AI Project Selector
+        </h1>
+        <p className="text-slate-600 mt-3 text-base sm:text-lg font-medium">Choose presenters fairly • 60-second updates</p>
       </header>
       
       <main className="app-layout">
@@ -262,35 +264,35 @@ const App: React.FC = () => {
         </section>
 
         <section className="app-controls-section app-section">
-          <div className="app-controls-card bg-white p-4 sm:p-6 rounded-2xl shadow-lg border border-slate-200">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4">Controls</h2>
+          <div className="app-controls-card bg-white p-5 sm:p-7 rounded-2xl shadow-xl border border-slate-200">
+            <h2 className="text-xl sm:text-2xl font-bold mb-5 text-slate-800">Controls</h2>
             <div className="space-y-3">
               <button
                 onClick={() => setIsNamesPanelOpen(true)}
-                className="w-full py-2.5 px-4 bg-white text-slate-700 font-semibold rounded-lg border-2 border-slate-300 hover:bg-slate-100 transition-colors"
+                className="w-full py-3 px-5 bg-white text-slate-700 font-semibold rounded-xl border-2 border-slate-300 hover:border-slate-400 hover:bg-slate-50 transition-all shadow-sm hover:shadow-md"
               >
-                Manage Names
+                📝 Manage Names
               </button>
               <button
                 onClick={handleSpin}
                 disabled={isSpinning || participants.length === 0}
-                className="w-full py-3 px-4 bg-slate-800 text-white font-bold text-lg rounded-lg shadow-md hover:bg-slate-900 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
+                className="w-full py-4 px-5 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl hover:from-blue-700 hover:to-purple-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
               >
-                SPIN THE WHEEL
+                🎯 SPIN THE WHEEL
               </button>
               {lastWinner && !participants.includes(lastWinner) && (
                 <button
                   onClick={handleReAddWinner}
-                  className="w-full py-2 px-4 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 transition-colors"
+                  className="w-full py-2.5 px-5 bg-emerald-50 text-emerald-700 font-semibold rounded-xl border-2 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 transition-all"
                 >
-                  Add "{lastWinner}" Back
+                  ↩️ Add "{lastWinner}" Back
                 </button>
               )}
               <button
                 onClick={handleResetWheel}
-                className="w-full py-2 px-4 border-2 border-slate-500 text-slate-600 font-semibold rounded-lg hover:bg-slate-100 transition-colors"
+                className="w-full py-2.5 px-5 border-2 border-slate-300 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-400 transition-all shadow-sm"
               >
-                Reset Wheel
+                🔄 Reset Wheel
               </button>
             </div>
           </div>
