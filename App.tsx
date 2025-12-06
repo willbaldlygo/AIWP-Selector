@@ -237,9 +237,8 @@ const App: React.FC = () => {
 
       <header className="app-header text-center">
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-          AI Project Selector
+          DPN Selector
         </h1>
-        <p className="text-slate-600 mt-3 text-base sm:text-lg font-medium">Choose presenters fairly • 60-second updates</p>
       </header>
       
       <main className="app-layout">
