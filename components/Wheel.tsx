@@ -11,10 +11,10 @@ interface WheelProps {
 
 const LABEL_FONT_FAMILY = `'Inter', system-ui, -apple-system, sans-serif`;
 const LABEL_FONT_WEIGHT = 700;
-const BASE_FONT_PX = 26;
+const BASE_FONT_PX = 24;
 const RADIAL_PADDING = 8;
 const MIN_FONT_PX = 11;
-const MAX_FONT_FACTOR = 1.2;
+const MAX_FONT_FACTOR = 1;
 
 let measureCanvas: HTMLCanvasElement | null = null;
 let measureContext: CanvasRenderingContext2D | null = null;
@@ -82,6 +82,8 @@ const Wheel: React.FC<WheelProps> = ({ participants, colors, rotation, onSpinEnd
     );
   }
 
+  const useInitials = numSegments > 12;
+
   const segments = participants.map((name, index) => {
     const startAngle = anglePerSegment * index;
     const endAngle = startAngle + anglePerSegment;
@@ -95,16 +97,34 @@ const Wheel: React.FC<WheelProps> = ({ participants, colors, rotation, onSpinEnd
     const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY} L 0 0 Z`;
     
     const textAngle = startAngle + anglePerSegment / 2;
+    const normalizedTextAngle = ((textAngle % 360) + 360) % 360;
     const textX = textRadius * Math.cos(textAngle * (Math.PI / 180));
     const textY = textRadius * Math.sin(textAngle * (Math.PI / 180));
-    const fontPx = computeLabelFontPx(name, anglePerSegment, textRadius, radius);
-    const needsEllipsis = name.length > 20 && fontPx <= MIN_FONT_PX + 0.5;
-    const displayName = needsEllipsis ? `${name.slice(0, 18)}…` : name;
+    let textRotation = normalizedTextAngle + 90;
+    // Flip text on the left side so it renders upright while following the arc.
+    if (normalizedTextAngle > 90 && normalizedTextAngle < 270) {
+      textRotation -= 180;
+    }
+
+    let displayName: string;
+    let fontPx: number;
+
+    if (useInitials) {
+      // Show only the first letter for large groups
+      displayName = name.charAt(0).toUpperCase();
+      // Use a fixed, comfortably large font for single characters
+      const arcSpace = textRadius * (anglePerSegment * (Math.PI / 180)) * 0.8;
+      fontPx = Math.min(28, Math.max(MIN_FONT_PX, arcSpace));
+    } else {
+      fontPx = computeLabelFontPx(name, anglePerSegment, textRadius, radius);
+      const needsEllipsis = name.length > 20 && fontPx <= MIN_FONT_PX + 0.5;
+      displayName = needsEllipsis ? `${name.slice(0, 18)}…` : name;
+    }
     
     return (
       <g key={index}>
         <path d={pathData} fill={colors[index % colors.length]} />
-        <g transform={`translate(${textX}, ${textY}) rotate(${textAngle})`}>
+        <g transform={`translate(${textX}, ${textY}) rotate(${textRotation})`}>
            <text
             textAnchor="middle"
             dominantBaseline="middle"

@@ -39,6 +39,38 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const removeNameEverywhere = useCallback((nameToRemove: string) => {
+    setParticipants(prev => prev.filter(name => name !== nameToRemove));
+    setAllNames(prev => {
+      const updated = prev.filter(name => name !== nameToRemove);
+      setNamesInput(updated.join('\n'));
+      return updated;
+    });
+  }, [setNamesInput]);
+
+  const removePendingWinner = useCallback(() => {
+    setPendingRemovalWinner(current => {
+      if (!current) {
+        return null;
+      }
+      removeNameEverywhere(current);
+      return null;
+    });
+  }, [removeNameEverywhere]);
+
+  const resetTimerState = useCallback(() => {
+    clearAutoResetTimeout();
+    setIsTimerActive(false);
+    setTimerStarted(false);
+    setTimeLeft(INITIAL_TIME);
+  }, [clearAutoResetTimeout]);
+
+  const finalizeTimerRound = useCallback(() => {
+    resetTimerState();
+    removePendingWinner();
+    setWinner(null);
+  }, [resetTimerState, removePendingWinner]);
+
   const playAudioClip = useCallback((audio: HTMLAudioElement | null) => {
     if (!audio) return;
     try {
@@ -89,24 +121,8 @@ const App: React.FC = () => {
       setTimeLeft(prevTime => {
         if (prevTime <= 1) {
           clearInterval(intervalId);
-          setIsTimerActive(false);
-          clearAutoResetTimeout();
           playAudioClip(finishAudioRef.current);
-          
-          // Set up auto-close after 10 seconds
-          autoResetTimeoutRef.current = window.setTimeout(() => {
-            autoResetTimeoutRef.current = null;
-            setTimeLeft(INITIAL_TIME);
-            setIsTimerActive(false);
-            setTimerStarted(false);
-            
-            // Remove the pending winner and close modal after 10 seconds
-            if (pendingRemovalWinner) {
-              setParticipants(prev => prev.filter(name => name !== pendingRemovalWinner));
-              setPendingRemovalWinner(null);
-            }
-            setWinner(null);
-          }, 10000);
+          finalizeTimerRound();
           return 0;
         }
         if (prevTime === 11) {
@@ -119,7 +135,7 @@ const App: React.FC = () => {
     return () => {
       clearInterval(intervalId);
     };
-  }, [isTimerActive, playAudioClip, clearAutoResetTimeout, pendingRemovalWinner]);
+  }, [isTimerActive, playAudioClip, finalizeTimerRound]);
 
   useEffect(() => {
     return () => {
@@ -180,6 +196,14 @@ const App: React.FC = () => {
   const handleReAddWinner = () => {
     if (lastWinner && !participants.includes(lastWinner)) {
       setParticipants(prev => [...prev, lastWinner]);
+      setAllNames(prev => {
+        if (prev.includes(lastWinner)) {
+          return prev;
+        }
+        const updated = [...prev, lastWinner];
+        setNamesInput(updated.join('\n'));
+        return updated;
+      });
       setLastWinner(null);
     }
     setWinner(null);
@@ -203,17 +227,7 @@ const App: React.FC = () => {
   };
 
   const handleTimerReset = () => {
-    clearAutoResetTimeout();
-    setIsTimerActive(false);
-    setTimeLeft(INITIAL_TIME);
-    setTimerStarted(false);
-    
-    // Remove the pending winner and close modal when timer is reset
-    if (pendingRemovalWinner) {
-      setParticipants(prev => prev.filter(name => name !== pendingRemovalWinner));
-      setPendingRemovalWinner(null);
-    }
-    setWinner(null);
+    finalizeTimerRound();
   };
 
   return (
