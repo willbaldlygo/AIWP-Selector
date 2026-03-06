@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "bash -c \"vite & PID=$!; trap 'kill $PID' EXIT; sleep 1; open -a 'Google Chrome' http://localhost:5151; wait $PID\"",
+    "dev": "vite",
+    "dev:chrome": "bash -c \"vite & PID=$!; trap 'kill $PID' EXIT; sleep 1; open -a 'Google Chrome' http://localhost:5151; wait $PID\"",
     "build": "vite build",
     "preview": "vite preview"
   },

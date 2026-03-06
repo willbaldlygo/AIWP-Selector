@@ -2,13 +2,12 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command }) => {
   return {
-    base: '/AIWP-Selector/',
+    base: command === 'build' ? '/AIWP-Selector/' : '/',
     server: {
       port: 5151,
-      host: '0.0.0.0',
-      open: true
+      host: '0.0.0.0'
     },
     plugins: [react()],
     resolve: {

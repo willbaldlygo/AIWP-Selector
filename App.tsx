@@ -14,7 +14,6 @@ const App: React.FC = () => {
   const [allNames, setAllNames] = useState<string[]>([]);
   const [participants, setParticipants] = useState<string[]>([]);
   const [winner, setWinner] = useState<string | null>(null);
-  const [lastWinner, setLastWinner] = useState<string | null>(null);
   const [pendingRemovalWinner, setPendingRemovalWinner] = useState<string | null>(null);
 
   const [rotation, setRotation] = useState<number>(0);
@@ -86,6 +85,17 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleTimerComplete = useCallback(() => {
+    playAudioClip(finishAudioRef.current);
+    clearAutoResetTimeout();
+    setIsTimerActive(false);
+    setTimeLeft(0);
+    // Keep the winner visible briefly at 0:00 before closing the round.
+    autoResetTimeoutRef.current = window.setTimeout(() => {
+      finalizeTimerRound();
+    }, 10000);
+  }, [clearAutoResetTimeout, finalizeTimerRound, playAudioClip]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -121,8 +131,7 @@ const App: React.FC = () => {
       setTimeLeft(prevTime => {
         if (prevTime <= 1) {
           clearInterval(intervalId);
-          playAudioClip(finishAudioRef.current);
-          finalizeTimerRound();
+          handleTimerComplete();
           return 0;
         }
         if (prevTime === 11) {
@@ -135,7 +144,7 @@ const App: React.FC = () => {
     return () => {
       clearInterval(intervalId);
     };
-  }, [isTimerActive, playAudioClip, finalizeTimerRound]);
+  }, [isTimerActive, playAudioClip, handleTimerComplete]);
 
   useEffect(() => {
     return () => {
@@ -145,6 +154,12 @@ const App: React.FC = () => {
 
   const handleUpdateNames = () => {
     const newNames = namesInput.split('\n').map(n => n.trim()).filter(Boolean);
+    clearAutoResetTimeout();
+    setWinner(null);
+    setPendingRemovalWinner(null);
+    setIsSpinning(false);
+    setSelectedIndex(null);
+    resetTimerState();
     setAllNames(newNames);
     setParticipants(newNames);
   };
@@ -185,36 +200,19 @@ const App: React.FC = () => {
     const selectedWinner = participants[winnerIndex];
     if (selectedWinner) {
       setWinner(selectedWinner);
-      setLastWinner(selectedWinner);
       setPendingRemovalWinner(selectedWinner);
-      // Don't remove from participants yet - will be removed when timer completes
     }
     setIsSpinning(false);
     setSelectedIndex(null);
   };
-
-  const handleReAddWinner = () => {
-    if (lastWinner && !participants.includes(lastWinner)) {
-      setParticipants(prev => [...prev, lastWinner]);
-      setAllNames(prev => {
-        if (prev.includes(lastWinner)) {
-          return prev;
-        }
-        const updated = [...prev, lastWinner];
-        setNamesInput(updated.join('\n'));
-        return updated;
-      });
-      setLastWinner(null);
-    }
-    setWinner(null);
-    setPendingRemovalWinner(null);
-  };
   
   const handleResetWheel = () => {
+    clearAutoResetTimeout();
+    resetTimerState();
     setParticipants(allNames);
-    setLastWinner(null);
     setWinner(null);
     setIsSpinning(false);
+    setSelectedIndex(null);
     setPendingRemovalWinner(null);
   };
 
@@ -292,14 +290,6 @@ const App: React.FC = () => {
               >
                 SPIN THE WHEEL
               </button>
-              {lastWinner && !participants.includes(lastWinner) && (
-                <button
-                  onClick={handleReAddWinner}
-                  className="w-full py-2 px-4 bg-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-300 transition-colors"
-                >
-                  Add "{lastWinner}" Back
-                </button>
-              )}
               <button
                 onClick={handleResetWheel}
                 className="w-full py-2 px-4 border-2 border-slate-500 text-slate-600 font-semibold rounded-lg hover:bg-slate-100 transition-colors"

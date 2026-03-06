@@ -6,6 +6,6 @@ osascript <<EOF
 set scriptDir to "$SCRIPT_DIR"
 tell application "Terminal"
   activate
-  do script "cd " & quoted form of scriptDir & " && npm run dev"
+  do script "cd " & quoted form of scriptDir & " && npm run dev:chrome"
 end tell
 EOF
