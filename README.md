@@ -1,16 +1,18 @@
-# Spin & Time Selector
+# Spin & Time
 
-![Spin & Time Selector wheel](./Wheel.png)
+![Spin & Time wheel](./Wheel.png)
 
-Spin & Time Selector is a React + TypeScript browser app for choosing a random person from a list and then giving them a visible 60-second speaking timer.
+Spin & Time is a React + TypeScript browser app for picking a random learner from a class list, built to be screen-shared in a live session.
 
 ## What It Does
 
-- Lets you paste or type one participant name per line.
-- Spins a wheel to choose a winner at random.
-- Plays audio when the wheel starts, when the timer reaches 10 seconds, and when time runs out.
-- Keeps the selected winner on the wheel while their 60-second timer runs.
-- Removes the winner only when the timer is reset or 10 seconds pass after `0:00`.
+- Spins a wheel to pick someone, and takes them out of the draw straight away. No timer needed, nothing to close.
+- Keeps the latest pick highlighted on the wheel until the next spin, so the pointer still lands on their slice.
+- **Put back on wheel** returns the pick to the draw if they're away or want to pass.
+- Shows two lists, *Still to go* and *Done*. Click a name to move it between them (e.g. someone volunteered).
+- Has an optional speaking timer (30s / 1:00 / 1:30 / 2:00) that is silent and stays on screen at 0:00 until you move on.
+- Remembers the class list, who has had a turn and the timer length in this browser, so a refresh mid-session loses nothing.
+- Keyboard: `Space` spins, `T` starts or pauses the timer.
 
 ## Requirements
 
@@ -53,12 +55,10 @@ Or double-click [`Launch Spin & Time.command`](./Launch%20Spin%20%26%20Time.comm
 
 ## How To Use The App
 
-1. Click `Manage Names`.
-2. Enter one name per line and choose `Update Wheel`.
-3. Click `SPIN THE WHEEL`.
-4. When a winner appears, click `Start 60s Timer`.
-5. Let the timer finish, or click `Reset Timer` to end the round early.
-6. Use `Reset Wheel` to restore the full original list.
+1. Click `Edit names`, paste one name per line (or a comma-separated list), and save. Duplicates are ignored.
+2. Press `Space` or click `Spin`. The picked name moves to *Done*.
+3. Optionally press `T` to start the timer.
+4. Spin again for the next person. When everyone has had a turn, click `Start a new round`.
 
 ## Available Scripts
 
@@ -69,11 +69,13 @@ Or double-click [`Launch Spin & Time.command`](./Launch%20Spin%20%26%20Time.comm
 
 ## Project Structure
 
-- `App.tsx` manages participants, wheel state, timer state, and audio playback.
-- `components/Wheel.tsx` renders the SVG spinning wheel and label layout.
-- `components/WinnerModal.tsx` shows the winner and the timer overlay.
-- `components/Timer.tsx` renders the always-visible timer card.
-- `components/NamesPanel.tsx` handles editing the participant list.
+- `App.tsx` holds the class list, who's done, the current pick and spin logic, and keyboard shortcuts.
+- `components/Wheel.tsx` renders the SVG wheel, sizing each label to fit its slice.
+- `components/SpeakerPanel.tsx` shows the current pick and the optional timer.
+- `components/RosterPanel.tsx` shows the *Still to go* and *Done* lists.
+- `components/NamesEditor.tsx` is the class list editor.
+- `hooks/useTimer.ts` is a countdown that stays accurate in background tabs.
+- `hooks/useStoredState.ts` keeps state in `localStorage`.
 
 ## Deployment
 
@@ -89,4 +91,5 @@ To deploy manually:
 ## Notes
 
 - No environment variables are required.
-- The app currently loads Tailwind’s browser build from the official CDN in `index.html`.
+- Names are stored only in the browser you use (`localStorage`). Nothing is sent anywhere.
+- There are no sound effects, so nothing competes with learners' audio on a call.

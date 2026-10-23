@@ -1,305 +1,176 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Wheel from './components/Wheel';
-import Timer from './components/Timer';
-import WinnerModal from './components/WinnerModal';
-import NamesPanel from './components/NamesPanel';
-import { BRAND_COLORS, INITIAL_TIME } from './constants';
+import SpeakerPanel from './components/SpeakerPanel';
+import RosterPanel from './components/RosterPanel';
+import NamesEditor from './components/NamesEditor';
+import { useStoredState } from './hooks/useStoredState';
+import { useTimer } from './hooks/useTimer';
+import { DEFAULT_DURATION, REDUCED_SPIN_MS, SAMPLE_NAMES, SPIN_MS, STORAGE_KEYS } from './constants';
 
-const wheelStartSrc = new URL('./Wheel_Start.wav', import.meta.url).href;
-const countdownSrc = new URL('./Countdown.wav', import.meta.url).href;
-const finishBellSrc = new URL('./Finish_Bell.wav', import.meta.url).href;
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 const App: React.FC = () => {
-  const [namesInput, setNamesInput] = useState<string>('Alice\nBob\nCharlie\nDiana\nEve\nFrank');
-  const [allNames, setAllNames] = useState<string[]>([]);
-  const [participants, setParticipants] = useState<string[]>([]);
-  const [winner, setWinner] = useState<string | null>(null);
-  const [pendingRemovalWinner, setPendingRemovalWinner] = useState<string | null>(null);
+  const [roster, setRoster] = useStoredState<string[]>(STORAGE_KEYS.roster, SAMPLE_NAMES);
+  // Names that have had their turn, in the order they were picked.
+  const [done, setDone] = useStoredState<string[]>(STORAGE_KEYS.done, []);
+  const [duration, setDuration] = useStoredState<number>(STORAGE_KEYS.duration, DEFAULT_DURATION);
 
-  const [rotation, setRotation] = useState<number>(0);
-  const [isSpinning, setIsSpinning] = useState<boolean>(false);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [pick, setPick] = useState<string | null>(null);
+  const [spinTarget, setSpinTarget] = useState<string | null>(null);
+  const [rotation, setRotation] = useState(0);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const spinTimeoutRef = useRef<number | null>(null);
 
-  const [timeLeft, setTimeLeft] = useState<number>(INITIAL_TIME);
-  const [isTimerActive, setIsTimerActive] = useState<boolean>(false);
-  const [timerStarted, setTimerStarted] = useState<boolean>(false);
+  const timer = useTimer(duration);
+  const isSpinning = spinTarget !== null;
+  const spinMs = prefersReducedMotion() ? REDUCED_SPIN_MS : SPIN_MS;
 
-  const [isNamesPanelOpen, setIsNamesPanelOpen] = useState<boolean>(false);
-  
-  const wheelStartAudioRef = useRef<HTMLAudioElement | null>(null);
-  const countdownAudioRef = useRef<HTMLAudioElement | null>(null);
-  const finishAudioRef = useRef<HTMLAudioElement | null>(null);
-  const autoResetTimeoutRef = useRef<number | null>(null);
+  const doneSet = useMemo(() => new Set(done), [done]);
+  const waiting = useMemo(() => roster.filter(n => !doneSet.has(n)), [roster, doneSet]);
+  // The latest pick stays on the wheel (highlighted) until the next spin, so
+  // the pointer still lands on their slice instead of the wheel redrawing
+  // under it. They are already out of the draw.
+  const wheelNames = useMemo(
+    () => roster.filter(n => !doneSet.has(n) || n === pick),
+    [roster, doneSet, pick]
+  );
 
-  const clearAutoResetTimeout = useCallback(() => {
-    if (autoResetTimeoutRef.current !== null) {
-      clearTimeout(autoResetTimeoutRef.current);
-      autoResetTimeoutRef.current = null;
-    }
-  }, []);
+  const spin = useCallback(() => {
+    if (isSpinning || waiting.length === 0) return;
 
-  const removeNameEverywhere = useCallback((nameToRemove: string) => {
-    setParticipants(prev => prev.filter(name => name !== nameToRemove));
-    setAllNames(prev => {
-      const updated = prev.filter(name => name !== nameToRemove);
-      setNamesInput(updated.join('\n'));
-      return updated;
+    const target = waiting[Math.floor(Math.random() * waiting.length)];
+    const index = waiting.indexOf(target);
+    const slice = 360 / waiting.length;
+    // Land somewhere inside the slice, not always dead centre.
+    const jitter = (Math.random() - 0.5) * slice * 0.7;
+    const landAt = 360 - (index * slice + slice / 2 + jitter);
+
+    setPick(null);
+    setSpinTarget(target);
+    timer.reset();
+    setRotation(prev => {
+      const current = ((prev % 360) + 360) % 360;
+      const delta = ((landAt - current + 360) % 360) + 360 * (prefersReducedMotion() ? 1 : 4);
+      return prev + delta;
     });
-  }, [setNamesInput]);
 
-  const removePendingWinner = useCallback(() => {
-    setPendingRemovalWinner(current => {
-      if (!current) {
-        return null;
+    // A timeout rather than transitionend: the latter never fires if the
+    // tab is hidden or the transition is interrupted.
+    spinTimeoutRef.current = window.setTimeout(() => {
+      setDone(prev => (prev.includes(target) ? prev : [...prev, target]));
+      setPick(target);
+      setSpinTarget(null);
+      spinTimeoutRef.current = null;
+    }, spinMs);
+  }, [isSpinning, waiting, timer, setDone, spinMs]);
+
+  useEffect(() => () => {
+    if (spinTimeoutRef.current !== null) window.clearTimeout(spinTimeoutRef.current);
+  }, []);
+
+  const putBack = useCallback(
+    (name: string) => {
+      setDone(prev => prev.filter(n => n !== name));
+      if (name === pick) {
+        setPick(null);
+        timer.reset();
       }
-      removeNameEverywhere(current);
-      return null;
-    });
-  }, [removeNameEverywhere]);
+    },
+    [pick, setDone, timer]
+  );
 
-  const resetTimerState = useCallback(() => {
-    clearAutoResetTimeout();
-    setIsTimerActive(false);
-    setTimerStarted(false);
-    setTimeLeft(INITIAL_TIME);
-  }, [clearAutoResetTimeout]);
+  const markDone = useCallback(
+    (name: string) => setDone(prev => (prev.includes(name) ? prev : [...prev, name])),
+    [setDone]
+  );
 
-  const finalizeTimerRound = useCallback(() => {
-    resetTimerState();
-    removePendingWinner();
-    setWinner(null);
-  }, [resetTimerState, removePendingWinner]);
+  const newRound = useCallback(() => {
+    setDone([]);
+    setPick(null);
+    timer.reset();
+  }, [setDone, timer]);
 
-  const playAudioClip = useCallback((audio: HTMLAudioElement | null) => {
-    if (!audio) return;
-    try {
-      audio.currentTime = 0;
-      const playPromise = audio.play();
-      if (playPromise instanceof Promise) {
-        playPromise.catch(error => {
-          console.error('Failed to play audio clip', error);
-        });
+  const saveNames = useCallback(
+    (names: string[]) => {
+      setRoster(names);
+      // Keep progress for anyone still on the list.
+      setDone(prev => prev.filter(n => names.includes(n)));
+      if (pick && !names.includes(pick)) setPick(null);
+      setEditorOpen(false);
+    },
+    [pick, setDone, setRoster]
+  );
+
+  // Keyboard: Space spins, T starts/pauses the timer. Space spins even when
+  // a button has focus, since that is usually just the last thing clicked.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (editorOpen || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement;
+      if (el.closest('input, textarea, select, [contenteditable]')) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        spin();
+      } else if (e.key === 't' || e.key === 'T') {
+        if (timer.running) timer.pause();
+        else timer.start();
       }
-    } catch (error) {
-      console.error('Failed to play audio clip', error);
-    }
-  }, []);
-
-  const handleTimerComplete = useCallback(() => {
-    playAudioClip(finishAudioRef.current);
-    clearAutoResetTimeout();
-    setIsTimerActive(false);
-    setTimeLeft(0);
-    // Keep the winner visible briefly at 0:00 before closing the round.
-    autoResetTimeoutRef.current = window.setTimeout(() => {
-      finalizeTimerRound();
-    }, 10000);
-  }, [clearAutoResetTimeout, finalizeTimerRound, playAudioClip]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const wheelAudio = new Audio(wheelStartSrc);
-    const countdownAudio = new Audio(countdownSrc);
-    const finishAudio = new Audio(finishBellSrc);
-
-    wheelAudio.preload = 'auto';
-    wheelAudio.load();
-    countdownAudio.preload = 'auto';
-    countdownAudio.load();
-    finishAudio.preload = 'auto';
-    finishAudio.load();
-
-    wheelStartAudioRef.current = wheelAudio;
-    countdownAudioRef.current = countdownAudio;
-    finishAudioRef.current = finishAudio;
-
-    return () => {
-      [wheelAudio, countdownAudio, finishAudio].forEach(audio => {
-        audio.pause();
-      });
-      wheelStartAudioRef.current = null;
-      countdownAudioRef.current = null;
-      finishAudioRef.current = null;
     };
-  }, []);
-
-  useEffect(() => {
-    if (!isTimerActive) return;
-
-    const intervalId = window.setInterval(() => {
-      setTimeLeft(prevTime => {
-        if (prevTime <= 1) {
-          clearInterval(intervalId);
-          handleTimerComplete();
-          return 0;
-        }
-        if (prevTime === 11) {
-          playAudioClip(countdownAudioRef.current);
-        }
-        return prevTime - 1;
-      });
-    }, 1000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [isTimerActive, playAudioClip, handleTimerComplete]);
-
-  useEffect(() => {
-    return () => {
-      clearAutoResetTimeout();
-    };
-  }, [clearAutoResetTimeout]);
-
-  const handleUpdateNames = () => {
-    const newNames = namesInput.split('\n').map(n => n.trim()).filter(Boolean);
-    clearAutoResetTimeout();
-    setWinner(null);
-    setPendingRemovalWinner(null);
-    setIsSpinning(false);
-    setSelectedIndex(null);
-    resetTimerState();
-    setAllNames(newNames);
-    setParticipants(newNames);
-  };
-  
-  useEffect(() => {
-      handleUpdateNames();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleSpin = () => {
-    if (isSpinning || participants.length === 0) return;
-
-    setIsSpinning(true);
-    setWinner(null);
-    const segmentCount = participants.length;
-    const anglePerSegment = 360 / segmentCount;
-    const targetIndex = Math.floor(Math.random() * segmentCount);
-    const halfSegment = anglePerSegment / 2;
-    setSelectedIndex(targetIndex);
-
-    const desiredRotation = 360 - (targetIndex * anglePerSegment + halfSegment);
-    const currentRotation = ((rotation % 360) + 360) % 360;
-    let deltaToDesired = (desiredRotation - currentRotation + 360) % 360;
-    if (deltaToDesired === 0) {
-      deltaToDesired += 360;
-    }
-    const extraTurns = 360 * (3 + Math.floor(Math.random() * 3));
-    const delta = extraTurns + deltaToDesired;
-
-    playAudioClip(wheelStartAudioRef.current);
-    setRotation(prev => prev + delta);
-  };
-  
-  const handleSpinEnd = () => {
-    if (!isSpinning) return;
-
-    const winnerIndex = selectedIndex !== null ? selectedIndex : 0;
-    const selectedWinner = participants[winnerIndex];
-    if (selectedWinner) {
-      setWinner(selectedWinner);
-      setPendingRemovalWinner(selectedWinner);
-    }
-    setIsSpinning(false);
-    setSelectedIndex(null);
-  };
-  
-  const handleResetWheel = () => {
-    clearAutoResetTimeout();
-    resetTimerState();
-    setParticipants(allNames);
-    setWinner(null);
-    setIsSpinning(false);
-    setSelectedIndex(null);
-    setPendingRemovalWinner(null);
-  };
-
-  const handleTimerStart = () => {
-    if (timeLeft > 0) {
-      clearAutoResetTimeout();
-      setIsTimerActive(true);
-      setTimerStarted(true);
-    }
-  };
-
-  const handleTimerReset = () => {
-    finalizeTimerRound();
-  };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editorOpen, spin, timer]);
 
   return (
-    <div className="app-root bg-slate-50 text-slate-800 font-sans">
-      <WinnerModal 
-        winner={winner} 
-        onClose={() => setWinner(null)}
-        onStartTimer={handleTimerStart}
-        timeLeft={timeLeft}
-        isTimerActive={isTimerActive}
-        timerStarted={timerStarted}
-        onTimerReset={handleTimerReset}
-      />
-      <NamesPanel
-        isOpen={isNamesPanelOpen}
-        onClose={() => setIsNamesPanelOpen(false)}
-        namesInput={namesInput}
-        onNamesChange={setNamesInput}
-        onUpdate={handleUpdateNames}
-      />
-
-      <header className="app-header text-center">
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight">Spin & Time Selector</h1>
-        <p className="text-slate-500 mt-2 text-sm sm:text-base">A fair way to choose, with a timer to keep things moving.</p>
+    <div className="app">
+      <header className="topbar">
+        <h1 className="topbar__title">Spin &amp; Time</h1>
+        <div className="topbar__actions">
+          <button type="button" className="btn btn--ghost" onClick={() => setEditorOpen(true)}>
+            Edit names
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={newRound}
+            disabled={done.length === 0 || isSpinning}
+            title="Put everyone back on the wheel"
+          >
+            New round
+          </button>
+        </div>
       </header>
-      
-      <main className="app-layout">
-        <section className="app-wheel-section app-section">
-          <Wheel 
-            participants={participants}
-            colors={BRAND_COLORS}
+
+      <main className="layout">
+        <div className="layout__wheel">
+          <Wheel
+            names={wheelNames}
             rotation={rotation}
+            spinMs={spinMs}
             isSpinning={isSpinning}
-            onSpinEnd={handleSpinEnd}
-            onSpin={handleSpin}
+            highlight={pick}
+            onSpin={spin}
           />
-        </section>
+        </div>
 
-        <section className="app-timer-section app-section">
-          <Timer 
-            timeLeft={timeLeft}
-            isActive={isTimerActive}
-            onStart={handleTimerStart}
-            onReset={handleTimerReset}
+        <div className="layout__side">
+          <SpeakerPanel
+            pick={pick}
+            isSpinning={isSpinning}
+            remainingCount={waiting.length}
+            totalCount={roster.length}
+            onSpin={spin}
+            onPutBack={() => pick && putBack(pick)}
+            onNewRound={newRound}
+            timer={timer}
+            duration={duration}
+            onDurationChange={setDuration}
           />
-        </section>
-
-        <section className="app-controls-section app-section">
-          <div className="app-controls-card bg-white p-4 sm:p-6 rounded-2xl shadow-lg border border-slate-200">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4">Controls</h2>
-            <div className="space-y-3">
-              <button
-                onClick={() => setIsNamesPanelOpen(true)}
-                className="w-full py-2.5 px-4 bg-white text-slate-700 font-semibold rounded-lg border-2 border-slate-300 hover:bg-slate-100 transition-colors"
-              >
-                Manage Names
-              </button>
-              <button
-                onClick={handleSpin}
-                disabled={isSpinning || participants.length === 0}
-                className="w-full py-3 px-4 bg-slate-800 text-white font-bold text-lg rounded-lg shadow-md hover:bg-slate-900 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
-              >
-                SPIN THE WHEEL
-              </button>
-              <button
-                onClick={handleResetWheel}
-                className="w-full py-2 px-4 border-2 border-slate-500 text-slate-600 font-semibold rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                Reset Wheel
-              </button>
-            </div>
-          </div>
-        </section>
+          <RosterPanel waiting={waiting} done={done} onMarkDone={markDone} onPutBack={putBack} />
+        </div>
       </main>
+
+      <NamesEditor open={editorOpen} roster={roster} onSave={saveNames} onClose={() => setEditorOpen(false)} />
     </div>
   );
 };

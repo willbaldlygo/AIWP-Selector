@@ -1,185 +1,135 @@
 import React from 'react';
+import { WHEEL_COLORS } from '../constants';
 
 interface WheelProps {
-  participants: string[];
-  colors: string[];
+  names: string[];
   rotation: number;
-  onSpinEnd: () => void;
+  spinMs: number;
   isSpinning: boolean;
+  highlight: string | null;
   onSpin: () => void;
 }
 
-const LABEL_FONT_FAMILY = `'Inter', system-ui, -apple-system, sans-serif`;
-const LABEL_FONT_WEIGHT = 700;
-const BASE_FONT_PX = 24;
-const RADIAL_PADDING = 8;
-const MIN_FONT_PX = 11;
-const MAX_FONT_FACTOR = 1;
+const R = 190;
+const LABEL_OUTER = R - 16;
+const LABEL_INNER = R * 0.3;
+const MAX_FONT = 30;
+const MIN_FONT = 10;
+const FONT = `700 {size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
 
-let measureCanvas: HTMLCanvasElement | null = null;
-let measureContext: CanvasRenderingContext2D | null = null;
-
-const getMeasureContext = () => {
-  if (typeof document === 'undefined') {
-    return null;
-  }
-  if (!measureCanvas) {
-    measureCanvas = document.createElement('canvas');
-  }
-  if (!measureContext) {
-    measureContext = measureCanvas.getContext('2d');
-  }
-  return measureContext;
+let ctx: CanvasRenderingContext2D | null = null;
+const measure = (text: string, size: number) => {
+  if (!ctx) ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) return text.length * size * 0.6;
+  ctx.font = FONT.replace('{size}', String(size));
+  return ctx.measureText(text).width;
 };
 
-const measureTextWidth = (label: string, fontPx: number) => {
-  const ctx = getMeasureContext();
-  if (!ctx) {
-    return label.length * fontPx * 0.6;
+// Point on the rim, with 0° at the top and angles running clockwise.
+const polar = (deg: number, r: number) => {
+  const rad = (deg * Math.PI) / 180;
+  return [r * Math.sin(rad), -r * Math.cos(rad)];
+};
+
+// Pick a colour per slice so neighbours never match, including the
+// wrap-around between the last slice and the first.
+const sliceColor = (i: number, n: number) => {
+  const len = WHEEL_COLORS.length;
+  if (n > 1 && i === n - 1 && n % len === 1) return WHEEL_COLORS[2 % len];
+  return WHEEL_COLORS[i % len];
+};
+
+// Labels run along the radius, so the space they get is the slice's
+// thickness (for font size) and the radius itself (for length).
+const fitLabel = (name: string, sliceDeg: number) => {
+  const length = LABEL_OUTER - LABEL_INNER;
+  const midR = (LABEL_OUTER + LABEL_INNER) / 2;
+  const thickness = sliceDeg >= 180 ? R : 2 * midR * Math.sin((sliceDeg * Math.PI) / 360);
+  let size = Math.min(MAX_FONT, thickness * 0.62);
+  const width = measure(name, size);
+  if (width > length) size = Math.max(MIN_FONT, (size * length) / width);
+
+  let label = name;
+  while (label.length > 1 && measure(label, size) > length) {
+    label = label.slice(0, -1);
   }
-  ctx.font = `${LABEL_FONT_WEIGHT} ${fontPx}px ${LABEL_FONT_FAMILY}`;
-  return ctx.measureText(label).width;
+  if (label !== name) label = `${label.slice(0, -1).trimEnd()}…`;
+  return { label, size };
 };
 
-const computeLabelFontPx = (
-  label: string,
-  angleDeg: number,
-  labelRadius: number,
-  outerRadius: number
-) => {
-  const angleRad = angleDeg * (Math.PI / 180);
-  const radialSpace = Math.max(0, (outerRadius - labelRadius) - RADIAL_PADDING);
-  const maxByRadial = Math.max(MIN_FONT_PX, radialSpace);
+const Wheel: React.FC<WheelProps> = ({ names, rotation, spinMs, isSpinning, highlight, onSpin }) => {
+  const n = names.length;
 
-  const arc = labelRadius * angleRad;
-  const arcUsable = Math.max(0, arc * 0.9);
-  const measuredAtBase = Math.max(1, measureTextWidth(label, BASE_FONT_PX));
-  const maxByArc = BASE_FONT_PX * (arcUsable / measuredAtBase);
-
-  const raw = Math.min(maxByRadial, maxByArc);
-  const capped = Math.min(raw, BASE_FONT_PX * MAX_FONT_FACTOR);
-  return Math.max(MIN_FONT_PX, capped);
-};
-
-const Wheel: React.FC<WheelProps> = ({ participants, colors, rotation, onSpinEnd, isSpinning, onSpin }) => {
-  const numSegments = participants.length;
-  const anglePerSegment = 360 / numSegments;
-  const radius = 180;
-  const textRadius = radius * 0.7;
-
-  const getCoordinatesForPercent = (percent: number) => {
-    const x = radius * Math.cos(2 * Math.PI * percent);
-    const y = radius * Math.sin(2 * Math.PI * percent);
-    return [x, y];
-  };
-
-  if (numSegments === 0) {
+  if (n === 0) {
     return (
-      <div className="wheel-shell relative flex items-center justify-center">
-        <div className="absolute w-full h-full border-4 border-dashed border-slate-300 rounded-full"></div>
-        <p className="text-slate-500">Add names to see the wheel</p>
+      <div className="wheel wheel--empty">
+        <p>Nobody left on the wheel</p>
       </div>
     );
   }
 
-  const useInitials = numSegments > 12;
-
-  const segments = participants.map((name, index) => {
-    const startAngle = anglePerSegment * index;
-    const endAngle = startAngle + anglePerSegment;
-    const startPercent = startAngle / 360;
-    const endPercent = endAngle / 360;
-
-    const [startX, startY] = getCoordinatesForPercent(startPercent);
-    const [endX, endY] = getCoordinatesForPercent(endPercent);
-    const largeArcFlag = anglePerSegment > 180 ? 1 : 0;
-
-    const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY} L 0 0 Z`;
-    
-    const textAngle = startAngle + anglePerSegment / 2;
-    const normalizedTextAngle = ((textAngle % 360) + 360) % 360;
-    const textX = textRadius * Math.cos(textAngle * (Math.PI / 180));
-    const textY = textRadius * Math.sin(textAngle * (Math.PI / 180));
-    let textRotation = normalizedTextAngle + 90;
-    // Flip text on the left side so it renders upright while following the arc.
-    if (normalizedTextAngle > 90 && normalizedTextAngle < 270) {
-      textRotation -= 180;
-    }
-
-    let displayName: string;
-    let fontPx: number;
-
-    if (useInitials) {
-      // Show only the first letter for large groups
-      displayName = name.charAt(0).toUpperCase();
-      // Use a fixed, comfortably large font for single characters
-      const arcSpace = textRadius * (anglePerSegment * (Math.PI / 180)) * 0.8;
-      fontPx = Math.min(28, Math.max(MIN_FONT_PX, arcSpace));
-    } else {
-      fontPx = computeLabelFontPx(name, anglePerSegment, textRadius, radius);
-      const needsEllipsis = name.length > 20 && fontPx <= MIN_FONT_PX + 0.5;
-      displayName = needsEllipsis ? `${name.slice(0, 18)}…` : name;
-    }
-    
-    return (
-      <g key={index}>
-        <path d={pathData} fill={colors[index % colors.length]} />
-        <g transform={`translate(${textX}, ${textY}) rotate(${textRotation})`}>
-           <text
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill="#000"
-            className="font-bold select-none"
-            style={{
-              fill: 'white',
-              stroke: 'rgba(0,0,0,0.28)',
-              strokeWidth: '1.5px',
-              paintOrder: 'stroke',
-              fontSize: `${fontPx}px`,
-              letterSpacing: '0.02em'
-            }}
-          >
-            {displayName}
-          </text>
-        </g>
-      </g>
-    );
-  });
-  
-  const canSpin = !isSpinning && participants.length > 0;
+  const slice = 360 / n;
 
   return (
-    <div className="wheel-shell relative flex items-center justify-center">
-      <div className="absolute top-[-10px] z-10">
-        <svg width="30" height="40" viewBox="0 0 30 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 40L29.7224 10H0.277568L15 40Z" fill="#1e293b"/>
-        </svg>
-      </div>
+    <div className="wheel">
+      <svg className="wheel__pointer" viewBox="0 0 40 48" aria-hidden="true">
+        <path d="M20 46 L38 6 Q20 0 2 6 Z" />
+      </svg>
+
       <div
-        className="w-full h-full rounded-full shadow-2xl transition-transform duration-[4000ms] ease-out"
-        style={{ transform: `rotate(${rotation}deg)` }}
-        onTransitionEnd={onSpinEnd}
+        className="wheel__disc"
+        style={{
+          transform: `rotate(${rotation}deg)`,
+          transitionDuration: `${spinMs}ms`,
+        }}
       >
-        <svg viewBox="-180 -180 360 360" transform="rotate(-90)" className="w-full h-full">
-          {segments}
+        <svg viewBox={`${-R - 6} ${-R - 6} ${2 * R + 12} ${2 * R + 12}`} aria-hidden="true">
+          <circle r={R + 4} className="wheel__rim" />
+          {/* Dimmed slices fade towards white rather than muddy dark. */}
+          <circle r={R} fill="#fff" />
+          {names.map((name, i) => {
+            const start = i * slice;
+            const mid = start + slice / 2;
+            const [x1, y1] = polar(start, R);
+            const [x2, y2] = polar(start + slice, R);
+            const path =
+              n === 1
+                ? `M 0 ${-R} A ${R} ${R} 0 1 1 0 ${R} A ${R} ${R} 0 1 1 0 ${-R} Z`
+                : `M 0 0 L ${x1} ${y1} A ${R} ${R} 0 ${slice > 180 ? 1 : 0} 1 ${x2} ${y2} Z`;
+
+            // Slices that come to rest on the left half are flipped so their
+            // text reads upright. `rotation` is already the final resting angle.
+            const flip = (((mid + rotation) % 360) + 360) % 360 > 180;
+            const { label, size } = fitLabel(name, slice);
+            const dimmed = highlight !== null && name !== highlight;
+
+            return (
+              <g key={name} className={dimmed ? 'wheel__slice is-dimmed' : 'wheel__slice'}>
+                <path d={path} fill={sliceColor(i, n)} />
+                <text
+                  transform={`rotate(${mid - 90 + (flip ? 180 : 0)})`}
+                  x={flip ? -LABEL_OUTER : LABEL_OUTER}
+                  y={0}
+                  textAnchor={flip ? 'start' : 'end'}
+                  dominantBaseline="central"
+                  fontSize={size}
+                >
+                  {label}
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
+
       <button
         type="button"
-        onClick={canSpin ? onSpin : undefined}
-        onKeyDown={(event) => {
-          if (!canSpin) return;
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onSpin();
-          }
-        }}
-        disabled={!canSpin}
-        aria-label={canSpin ? 'Spin the wheel' : 'Cannot spin the wheel'}
-        className="absolute flex items-center justify-center w-12 h-12 bg-white rounded-full border-4 border-slate-800 shadow-inner focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-600 disabled:cursor-not-allowed"
-        style={{ cursor: canSpin ? 'pointer' : 'not-allowed' }}
+        className="wheel__hub"
+        onClick={onSpin}
+        disabled={isSpinning}
+        aria-label="Spin the wheel"
       >
-        <span className="sr-only">Spin the wheel</span>
+        Spin
       </button>
     </div>
   );
